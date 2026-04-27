@@ -1,0 +1,9 @@
+{
+  "name": "vibeblt-root",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --dir ./app dev",
+    "build": "pnpm --dir ./app build",
+    "typecheck": "pnpm --dir ./app typecheck"
+  }
+}
