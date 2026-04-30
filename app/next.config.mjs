@@ -13,10 +13,6 @@ const nextConfig = {
       bodySizeLimit: "60mb",
     },
   },
-  turbopack: {
-    root: projectRoot,
-  },
-  outputFileTracingRoot: projectRoot,
 }
 
 export default nextConfig
