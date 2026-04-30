@@ -3,5 +3,5 @@
   "framework": "nextjs",
   "installCommand": "pnpm --dir ./app install --frozen-lockfile",
   "buildCommand": "pnpm --dir ./app build",
-  "outputDirectory": null
+  "outputDirectory": "app/.next"
 }
