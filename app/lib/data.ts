@@ -270,8 +270,29 @@ export async function getProjectsByBuilder(username: string) {
 
 export async function getFeaturedProjects() {
   noStore()
+  const featuredProjectLimit = 16
   const projects = await getPublicProjects()
-  return projects.slice(0, 6)
+  const prioritizedProjects = [...projects].sort((projectA, projectB) => {
+    const projectAIsDylan = projectA.owner.username === "dylan-mares"
+    const projectBIsDylan = projectB.owner.username === "dylan-mares"
+
+    if (projectAIsDylan === projectBIsDylan) {
+      return 0
+    }
+
+    return projectAIsDylan ? -1 : 1
+  })
+
+  if (prioritizedProjects.length >= featuredProjectLimit) {
+    return prioritizedProjects.slice(0, featuredProjectLimit)
+  }
+
+  const usedProjectIds = new Set(prioritizedProjects.map((project) => project.id))
+  const fillerProjects = demoProjects
+    .filter((project) => !usedProjectIds.has(project.id))
+    .slice(0, featuredProjectLimit - prioritizedProjects.length)
+
+  return [...prioritizedProjects, ...fillerProjects]
 }
 
 export async function getLikedProjectsForViewer(userId: string) {

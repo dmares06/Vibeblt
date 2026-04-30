@@ -7,6 +7,12 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Vibeblt",
   description: "Launch AI-built projects, get useful feedback, and find collaborators.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+  },
 }
 
 export default function RootLayout({

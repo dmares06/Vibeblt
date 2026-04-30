@@ -97,6 +97,62 @@ export async function signOutAction() {
   redirect("/")
 }
 
+export async function createContactEmailAction(formData: FormData) {
+  const senderEmail = getString(formData, "email")
+  const subject = getString(formData, "subject") || "Vibeblt contact"
+  const message = getString(formData, "message")
+  const resendApiKey = process.env.RESEND_API_KEY
+  const contactToEmail = process.env.CONTACT_TO_EMAIL ?? "dylanmares06@gmail.com"
+  const contactFromEmail = process.env.CONTACT_FROM_EMAIL ?? "Vibeblt <onboarding@resend.dev>"
+
+  if (!senderEmail || !senderEmail.includes("@")) {
+    redirect("/contact?error=invalid-email")
+  }
+
+  if (!message) {
+    redirect("/contact?error=missing-message")
+  }
+
+  if (subject.length > 120) {
+    redirect("/contact?error=subject-too-long")
+  }
+
+  if (message.length > 3000) {
+    redirect("/contact?error=message-too-long")
+  }
+
+  if (!resendApiKey) {
+    redirect("/contact?error=email-not-configured")
+  }
+
+  const body = [
+    `Sender email: ${senderEmail}`,
+    `Subject: ${subject}`,
+    "",
+    message,
+  ].join("\n")
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: contactFromEmail,
+      to: [contactToEmail],
+      subject: `[Vibeblt] ${subject}`,
+      text: body,
+    }),
+  })
+
+  if (!response.ok) {
+    redirect("/contact?error=send-failed")
+  }
+
+  redirect("/contact?sent=1")
+}
+
 export async function createProjectCommentAction(formData: FormData) {
   configuredGuard()
   const viewer = await getViewer()
