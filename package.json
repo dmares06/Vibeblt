@@ -2,8 +2,10 @@
   "name": "vibeblt-root",
   "private": true,
   "scripts": {
-    "dev": "pnpm --dir ./app dev",
-    "build": "pnpm --dir ./app build",
-    "typecheck": "pnpm --dir ./app typecheck"
+    "dev": "pnpm -C ./app run dev",
+    "prebuild": "pnpm -C ./app install --frozen-lockfile",
+    "build": "pnpm -C ./app run build",
+    "pretypecheck": "pnpm -C ./app install --frozen-lockfile",
+    "typecheck": "pnpm -C ./app run typecheck"
   }
 }
