@@ -24,6 +24,7 @@ export const adminStatuses = ["pending_review", "changes_requested"] as const
 
 export const maxScreenshotCount = 5
 export const maxMediaUploadBytes = 50 * 1024 * 1024
+export const maxAvatarUploadBytes = 5 * 1024 * 1024
 export const maxProjectTagCount = 6
 
 export const presetProjectTags = [

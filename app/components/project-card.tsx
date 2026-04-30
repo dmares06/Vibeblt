@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { toggleProjectLikeAction } from "@/app/actions"
 import { HelpWantedBadges } from "@/components/help-wanted-badges"
 import { ProjectTopicBadges } from "@/components/project-topic-badges"
 import type { ProjectRecord } from "@/lib/types"
@@ -7,9 +8,10 @@ type ProjectCardProps = {
   project: ProjectRecord
   variant?: "default" | "compact"
   showHelpTags?: boolean
+  redirectTo?: string
 }
 
-export function ProjectCard({ project, variant = "default", showHelpTags = true }: ProjectCardProps) {
+export function ProjectCard({ project, variant = "default", showHelpTags = true, redirectTo = `/project/${project.slug}` }: ProjectCardProps) {
   const isCompact = variant === "compact"
 
   return (
@@ -89,22 +91,32 @@ export function ProjectCard({ project, variant = "default", showHelpTags = true 
                 </svg>
                 <span>{project.viewCount || 0}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width={isCompact ? "12" : "14"}
-                  height={isCompact ? "12" : "14"}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              <form action={toggleProjectLikeAction}>
+                <input type="hidden" name="projectId" value={project.id} />
+                <input type="hidden" name="redirectTo" value={redirectTo} />
+                <button
+                  className={`flex items-center gap-1 transition-colors hover:text-rose-600 ${
+                    project.isLikedByViewer ? "text-rose-600" : ""
+                  }`}
+                  aria-pressed={project.isLikedByViewer ? "true" : "false"}
+                  aria-label={project.isLikedByViewer ? `Unlike ${project.name}` : `Like ${project.name}`}
                 >
-                  <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                </svg>
-                <span>{project.heartCount || 0}</span>
-              </div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width={isCompact ? "12" : "14"}
+                    height={isCompact ? "12" : "14"}
+                    viewBox="0 0 24 24"
+                    fill={project.isLikedByViewer ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                  </svg>
+                  <span>{project.heartCount || 0}</span>
+                </button>
+              </form>
             </div>
           </div>
 

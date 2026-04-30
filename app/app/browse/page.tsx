@@ -14,6 +14,17 @@ export default async function BrowsePage({ searchParams }: BrowsePageProps) {
   const params = await searchParams
   const selectedCategory = params.category ?? ""
   const query = params.q?.trim().toLowerCase() ?? ""
+  const filterParams = new URLSearchParams()
+
+  if (params.q) {
+    filterParams.set("q", params.q)
+  }
+
+  if (selectedCategory) {
+    filterParams.set("category", selectedCategory)
+  }
+
+  const redirectTo = filterParams.size > 0 ? `/browse?${filterParams.toString()}` : "/browse"
   const allProjects = await getPublicProjects()
   const filteredProjects = allProjects.filter((project) => {
     const categoryMatch = selectedCategory ? project.category === selectedCategory : true
@@ -89,7 +100,7 @@ export default async function BrowsePage({ searchParams }: BrowsePageProps) {
 
       <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {filteredProjects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
+          <ProjectCard key={project.id} project={project} redirectTo={redirectTo} />
         ))}
       </div>
 

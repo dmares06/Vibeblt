@@ -33,7 +33,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       )}
 
       <div className="rounded-[2.5rem] border border-border bg-card shadow-sm overflow-hidden">
-        <form action={updateAccountSettingsAction}>
+        <form action={updateAccountSettingsAction} encType="multipart/form-data">
           <div className="p-8 sm:p-10 space-y-8">
             {/* General Info */}
             <section className="space-y-6">
@@ -81,6 +81,25 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               </label>
 
               <label className="grid gap-2">
+                <span className="text-sm font-semibold px-1">Avatar Image</span>
+                <input
+                  name="avatarFile"
+                  type="file"
+                  accept="image/*"
+                  className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm"
+                />
+                {profile.avatarUrl ? (
+                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
+                    <span className="h-14 w-14 overflow-hidden rounded-full bg-muted">
+                      <img src={profile.avatarUrl} alt={profile.fullName} className="h-full w-full object-cover" />
+                    </span>
+                    <span className="text-xs text-muted-foreground">Current avatar. Choose a new image to replace it.</span>
+                  </div>
+                ) : null}
+                <p className="text-[11px] text-muted-foreground px-1">Upload a square image up to 5 MB.</p>
+              </label>
+
+              <label className="grid gap-2">
                 <span className="text-sm font-semibold px-1">Avatar URL</span>
                 <input
                   name="avatarUrl"
@@ -89,7 +108,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                   placeholder="https://example.com/avatar.jpg"
                   className="min-h-12 rounded-2xl border border-border bg-background px-4 py-2 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-all"
                 />
-                <p className="text-[11px] text-muted-foreground px-1">Direct link to an image. Square aspect ratio works best.</p>
+                <p className="text-[11px] text-muted-foreground px-1">Optional fallback. A selected image upload replaces this URL.</p>
               </label>
             </section>
 

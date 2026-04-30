@@ -25,11 +25,19 @@ export async function SiteHeader() {
 
         <div className="flex items-center gap-4">
           {viewer ? (
-            <UserDropdown
-              profile={viewer.profile}
-              signOutAction={signOutAction}
-              startNewSubmissionAction={startNewSubmissionAction}
-            />
+            <>
+              <Link
+                href="/dashboard"
+                className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-[#2b7fff]/40 hover:bg-[#edf5ff] hover:text-[#2b7fff]"
+              >
+                Dashboard
+              </Link>
+              <UserDropdown
+                profile={viewer.profile}
+                signOutAction={signOutAction}
+                startNewSubmissionAction={startNewSubmissionAction}
+              />
+            </>
           ) : (
             <>
               <Link

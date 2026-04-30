@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { getBuilderByUsername, getProjectsByBuilder } from "@/lib/data"
+import { getBuilderByUsername, getProjectsByBuilder, getViewer } from "@/lib/data"
 import { ProjectCard } from "@/components/project-card"
 import { BuilderProfileCard } from "@/components/builder-profile-card"
 
@@ -16,16 +16,17 @@ export default async function BuilderPage({ params }: BuilderPageProps) {
   }
 
   const projects = await getProjectsByBuilder(username)
+  const viewer = await getViewer()
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-      <BuilderProfileCard builder={builder} variant="header" />
+      <BuilderProfileCard builder={builder} variant="header" viewerId={viewer?.userId} redirectTo={`/builder/${username}`} />
 
       <section className="mt-12">
         <h2 className="font-serif text-3xl">Projects by {builder.fullName.split(" ")[0]}</h2>
         <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <ProjectCard key={project.id} project={project} redirectTo={`/builder/${username}`} />
           ))}
         </div>
       </section>

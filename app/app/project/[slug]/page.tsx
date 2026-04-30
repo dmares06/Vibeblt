@@ -4,8 +4,8 @@ import { HelpWantedBadges } from "@/components/help-wanted-badges"
 import { ProjectTopicBadges } from "@/components/project-topic-badges"
 import { BuilderProfileCard } from "@/components/builder-profile-card"
 import { ProjectComments } from "@/components/project-comments"
-import { getProjectBySlug, getProjectsByBuilder } from "@/lib/data"
-import { demoComments } from "@/lib/demo-data"
+import { toggleProjectLikeAction } from "@/app/actions"
+import { getProjectBySlug, getProjectComments, getProjectsByBuilder, getViewer } from "@/lib/data"
 import { ProjectCard } from "@/components/project-card"
 import { formatDate } from "@/lib/utils"
 
@@ -23,7 +23,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   const builderProjects = await getProjectsByBuilder(project.owner.username)
   const otherProjects = builderProjects.filter((p) => p.id !== project.id).slice(0, 3)
-  const comments = demoComments.filter((c) => c.projectId === project.id || (project.id === "demo-project-1" && c.projectId === "demo-project-1") || (project.id === "demo-project-2" && c.projectId === "demo-project-2"))
+  const [comments, viewer] = await Promise.all([getProjectComments(project.id), getViewer()])
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
@@ -53,7 +53,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             </div>
           </div>
 
-          <ProjectComments comments={comments} projectId={project.id} />
+          <ProjectComments comments={comments} projectId={project.id} projectSlug={project.slug} viewer={viewer} />
         </div>
 
         <aside className="space-y-8">
@@ -69,14 +69,33 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Launch Details</p>
                 <p className="mt-2 text-sm text-muted-foreground">Published {formatDate(project.updatedAt)}</p>
               </div>
-              <a
-                href={project.projectUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-lg transition-transform hover:-translate-y-0.5 active:scale-95"
-              >
-                Visit live project
-              </a>
+              <div className="flex flex-wrap gap-2">
+                <form action={toggleProjectLikeAction}>
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="redirectTo" value={`/project/${project.slug}`} />
+                  <button
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                      project.isLikedByViewer
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-border bg-background text-foreground hover:bg-muted"
+                    }`}
+                    aria-pressed={project.isLikedByViewer ? "true" : "false"}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill={project.isLikedByViewer ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                    </svg>
+                    {project.isLikedByViewer ? "Liked" : "Like"} {project.heartCount || 0}
+                  </button>
+                </form>
+                <a
+                  href={project.projectUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-lg transition-transform hover:-translate-y-0.5 active:scale-95"
+                >
+                  Visit live project
+                </a>
+              </div>
             </div>
             
             <div className="mt-6 flex flex-wrap gap-2">
@@ -92,7 +111,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
           <section>
             <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Meet the Builder</p>
-            <BuilderProfileCard builder={project.owner} />
+            <BuilderProfileCard builder={project.owner} viewerId={viewer?.userId} redirectTo={`/project/${project.slug}`} />
           </section>
         </aside>
       </div>
@@ -110,7 +129,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           </div>
           <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {otherProjects.map((candidate) => (
-              <ProjectCard key={candidate.id} project={candidate} />
+              <ProjectCard key={candidate.id} project={candidate} redirectTo={`/project/${project.slug}`} />
             ))}
           </div>
         </section>

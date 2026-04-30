@@ -3,10 +3,10 @@ import "server-only"
 import { unstable_noStore as noStore } from "next/cache"
 import type { SupabaseClient, User } from "@supabase/supabase-js"
 import { categories, type Category } from "@/lib/constants"
-import { demoProjects } from "@/lib/demo-data"
+import { demoComments, demoProjects } from "@/lib/demo-data"
 import { isSupabaseConfigured, getAdminEmails } from "@/lib/supabase/env"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import type { AuthViewer, BuilderProfile, ProjectRecord, ProjectStatus } from "@/lib/types"
+import type { AuthViewer, BuilderProfile, ProjectComment, ProjectRecord, ProjectStatus } from "@/lib/types"
 import { slugify } from "@/lib/utils"
 
 type ProjectRow = {
@@ -55,6 +55,17 @@ type ProfileRow = {
   github_url: string | null
   follower_count: number | null
   project_count: number | null
+}
+
+type ProjectCommentRow = {
+  id: string
+  project_id: string
+  user_id: string
+  parent_id: string | null
+  content: string
+  is_hidden: boolean
+  created_at: string
+  updated_at: string
 }
 
 function toBuilderProfile(profile: ProfileRow): BuilderProfile {
@@ -153,6 +164,69 @@ async function loadProjects(projectRows: ProjectRow[], mode: ProjectViewMode) {
     .filter((project): project is ProjectRecord => Boolean(project))
 }
 
+async function getAuthenticatedUserId() {
+  if (!isSupabaseConfigured()) {
+    return null
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  return user?.id ?? null
+}
+
+async function hydrateProjectInteractionState(projects: ProjectRecord[], viewerId?: string | null) {
+  const userId = viewerId ?? (await getAuthenticatedUserId())
+
+  if (!userId || projects.length === 0) {
+    return projects
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const projectIds = projects.map((project) => project.id)
+  const creatorIds = Array.from(new Set(projects.map((project) => project.owner.id)))
+  const [{ data: likes }, { data: follows }] = await Promise.all([
+    supabase.from("project_likes").select("project_id").eq("user_id", userId).in("project_id", projectIds),
+    supabase.from("creator_follows").select("creator_id").eq("follower_id", userId).in("creator_id", creatorIds),
+  ])
+
+  const likedProjectIds = new Set((likes ?? []).map((like) => like.project_id as string))
+  const followedCreatorIds = new Set((follows ?? []).map((follow) => follow.creator_id as string))
+
+  return projects.map((project) => ({
+    ...project,
+    isLikedByViewer: likedProjectIds.has(project.id),
+    owner: {
+      ...project.owner,
+      isFollowedByViewer: followedCreatorIds.has(project.owner.id),
+    },
+  }))
+}
+
+async function hydrateBuilderFollowState(builders: BuilderProfile[], viewerId?: string | null) {
+  const userId = viewerId ?? (await getAuthenticatedUserId())
+
+  if (!userId || builders.length === 0) {
+    return builders
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const builderIds = builders.map((builder) => builder.id)
+  const { data } = await supabase
+    .from("creator_follows")
+    .select("creator_id")
+    .eq("follower_id", userId)
+    .in("creator_id", builderIds)
+  const followedBuilderIds = new Set((data ?? []).map((follow) => follow.creator_id as string))
+
+  return builders.map((builder) => ({
+    ...builder,
+    isFollowedByViewer: followedBuilderIds.has(builder.id),
+  }))
+}
+
 export async function getPublicProjects() {
   noStore()
   if (!isSupabaseConfigured()) {
@@ -171,7 +245,8 @@ export async function getPublicProjects() {
     return []
   }
 
-  return loadProjects(data as ProjectRow[], "public")
+  const projects = await loadProjects(data as ProjectRow[], "public")
+  return hydrateProjectInteractionState(projects)
 }
 
 export async function getProjectBySlug(slug: string) {
@@ -197,6 +272,152 @@ export async function getFeaturedProjects() {
   noStore()
   const projects = await getPublicProjects()
   return projects.slice(0, 6)
+}
+
+export async function getLikedProjectsForViewer(userId: string) {
+  noStore()
+
+  if (!isSupabaseConfigured()) {
+    return []
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: likes, error: likesError } = await supabase
+    .from("project_likes")
+    .select("project_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+
+  if (likesError || !likes || likes.length === 0) {
+    return []
+  }
+
+  const projectIds = likes.map((like) => like.project_id as string)
+  const { data: projectRows, error: projectsError } = await supabase
+    .from("projects")
+    .select("*")
+    .in("id", projectIds)
+    .eq("status", "approved")
+    .not("live_revision_id", "is", null)
+
+  if (projectsError || !projectRows) {
+    return []
+  }
+
+  const projectOrder = new Map(projectIds.map((id, index) => [id, index]))
+  const projects = await loadProjects(dataSortedBy(projectRows as ProjectRow[], projectOrder), "public")
+  const hydrated = await hydrateProjectInteractionState(projects, userId)
+
+  return hydrated.map((project) => ({ ...project, isLikedByViewer: true }))
+}
+
+export async function getFollowedCreatorsForViewer(userId: string) {
+  noStore()
+
+  if (!isSupabaseConfigured()) {
+    return []
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: follows, error: followsError } = await supabase
+    .from("creator_follows")
+    .select("creator_id")
+    .eq("follower_id", userId)
+    .order("created_at", { ascending: false })
+
+  if (followsError || !follows || follows.length === 0) {
+    return []
+  }
+
+  const creatorIds = follows.map((follow) => follow.creator_id as string)
+  const { data: profiles, error: profilesError } = await supabase.from("profiles").select("*").in("id", creatorIds)
+
+  if (profilesError || !profiles) {
+    return []
+  }
+
+  const creatorOrder = new Map(creatorIds.map((id, index) => [id, index]))
+  const builders = dataSortedBy(profiles as ProfileRow[], creatorOrder).map((profile) => ({
+    ...toBuilderProfile(profile),
+    isFollowedByViewer: true,
+  }))
+
+  return hydrateBuilderFollowState(builders, userId)
+}
+
+function dataSortedBy<T extends { id: string }>(rows: T[], order: Map<string, number>) {
+  return [...rows].sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+}
+
+function buildCommentTree(comments: ProjectComment[]) {
+  const commentMap = new Map(comments.map((comment) => [comment.id, { ...comment, replies: [] as ProjectComment[] }]))
+  const roots: ProjectComment[] = []
+
+  commentMap.forEach((comment) => {
+    if (comment.parentId) {
+      const parent = commentMap.get(comment.parentId)
+
+      if (parent) {
+        parent.replies.push(comment)
+      }
+
+      return
+    }
+
+    roots.push(comment)
+  })
+
+  return roots
+}
+
+export async function getProjectComments(projectId: string) {
+  noStore()
+
+  if (!isSupabaseConfigured()) {
+    return buildCommentTree(demoComments.filter((comment) => comment.projectId === projectId && !comment.isHidden))
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: commentRows, error } = await supabase
+    .from("project_comments")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("is_hidden", false)
+    .order("created_at", { ascending: true })
+
+  if (error || !commentRows || commentRows.length === 0) {
+    return []
+  }
+
+  const userIds = Array.from(new Set(commentRows.map((comment) => comment.user_id)))
+  const { data: profiles } = await supabase.from("profiles").select("*").in("id", userIds)
+  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile as ProfileRow]))
+
+  const comments: ProjectComment[] = []
+  const typedCommentRows = commentRows as ProjectCommentRow[]
+
+  typedCommentRows.forEach((comment) => {
+    const profile = profileMap.get(comment.user_id)
+
+    if (!profile) {
+      return
+    }
+
+    comments.push({
+      id: comment.id,
+      projectId: comment.project_id,
+      userId: comment.user_id,
+      user: toBuilderProfile(profile),
+      parentId: comment.parent_id,
+      content: comment.content,
+      isHidden: comment.is_hidden,
+      createdAt: comment.created_at,
+      likeCount: 0,
+      replies: [],
+    })
+  })
+
+  return buildCommentTree(comments)
 }
 
 export async function getViewer(): Promise<AuthViewer | null> {

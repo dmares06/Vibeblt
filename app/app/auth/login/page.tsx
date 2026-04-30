@@ -3,7 +3,7 @@ import { signInWithGithubAction, signInWithGoogleAction } from "@/app/actions"
 import { isSupabaseConfigured } from "@/lib/supabase/env"
 
 interface LoginPageProps {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; next?: string }>
 }
 
 function GoogleMark() {
@@ -40,6 +40,7 @@ function GitHubMark() {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams
   const configured = isSupabaseConfigured()
+  const nextPath = params.next?.startsWith("/") && !params.next.startsWith("//") ? params.next : "/submit"
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-10rem)] max-w-5xl items-center px-4 py-12 sm:px-6 lg:px-8">
@@ -73,6 +74,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           <div className="mt-8 grid gap-3">
             <form action={signInWithGoogleAction}>
+              <input type="hidden" name="next" value={nextPath} />
               <button
                 disabled={!configured}
                 className="flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-left text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
@@ -82,6 +84,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               </button>
             </form>
             <form action={signInWithGithubAction}>
+              <input type="hidden" name="next" value={nextPath} />
               <button
                 disabled={!configured}
                 className="flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-left text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"

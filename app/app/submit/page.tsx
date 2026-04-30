@@ -253,7 +253,7 @@ export default async function SubmitPage({ searchParams }: SubmitPageProps) {
               <h2 className="mt-3 font-serif text-4xl">{stepDescriptions[currentStep]}</h2>
 
           {currentStep === "profile" ? (
-            <form action={saveSubmissionProfileAction} className="mt-8 grid gap-6">
+            <form action={saveSubmissionProfileAction} encType="multipart/form-data" className="mt-8 grid gap-6">
               {project ? <input type="hidden" name="projectId" value={project.id} /> : null}
               <input type="hidden" name="nextStep" value="project" />
 
@@ -286,6 +286,24 @@ export default async function SubmitPage({ searchParams }: SubmitPageProps) {
                   placeholder="What do you build and what kind of projects do you want to be known for?"
                   className="rounded-2xl border border-border px-4 py-3"
                 />
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold">Avatar image</span>
+                <input
+                  name="avatarFile"
+                  type="file"
+                  accept="image/*"
+                  className="rounded-2xl border border-dashed border-border px-4 py-3"
+                />
+                {viewer.profile.avatarUrl ? (
+                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
+                    <span className="h-14 w-14 overflow-hidden rounded-full bg-muted">
+                      <img src={viewer.profile.avatarUrl} alt={viewer.profile.fullName} className="h-full w-full object-cover" />
+                    </span>
+                    <span className="text-xs text-muted-foreground">Current avatar. Choose a new image to replace it.</span>
+                  </div>
+                ) : null}
               </label>
 
               <label className="grid gap-2">

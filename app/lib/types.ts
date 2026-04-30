@@ -20,6 +20,7 @@ export interface BuilderProfile {
   githubUrl?: string | null
   followerCount?: number
   projectCount?: number
+  isFollowedByViewer?: boolean
 }
 
 export interface ProjectRevisionContent {
@@ -50,6 +51,7 @@ export interface ProjectRecord extends ProjectRevisionContent {
   isLive: boolean
   viewCount?: number
   heartCount?: number
+  isLikedByViewer?: boolean
 }
 
 export interface AuthViewer {
@@ -67,7 +69,10 @@ export interface ProjectComment {
   projectId: string
   userId: string
   user: BuilderProfile
+  parentId?: string | null
   content: string
+  isHidden?: boolean
   createdAt: string
   likeCount: number
+  replies: ProjectComment[]
 }

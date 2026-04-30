@@ -1,13 +1,17 @@
 import Link from "next/link"
+import { toggleCreatorFollowAction } from "@/app/actions"
 import type { BuilderProfile } from "@/lib/types"
 
 interface BuilderProfileCardProps {
   builder: BuilderProfile
   variant?: "card" | "header"
+  viewerId?: string | null
+  redirectTo?: string
 }
 
-export function BuilderProfileCard({ builder, variant = "card" }: BuilderProfileCardProps) {
+export function BuilderProfileCard({ builder, variant = "card", viewerId, redirectTo = `/builder/${builder.username}` }: BuilderProfileCardProps) {
   const isHeader = variant === "header"
+  const isSelf = viewerId === builder.id
 
   return (
     <div
@@ -88,12 +92,26 @@ export function BuilderProfileCard({ builder, variant = "card" }: BuilderProfile
 
           {/* Actions Section */}
           <div className="flex flex-wrap items-center gap-3 pt-4">
-            <button className="rounded-full bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 hover:shadow-blue-200 active:scale-95">
-              Follow
-            </button>
-            <button className="rounded-full border border-border bg-background px-6 py-2.5 text-sm font-bold text-foreground transition-all hover:bg-muted active:scale-95">
-              Message
-            </button>
+            {isSelf ? (
+              <span className="rounded-full border border-border bg-background px-6 py-2.5 text-sm font-bold text-muted-foreground">
+                Your profile
+              </span>
+            ) : (
+              <form action={toggleCreatorFollowAction}>
+                <input type="hidden" name="creatorId" value={builder.id} />
+                <input type="hidden" name="redirectTo" value={redirectTo} />
+                <button
+                  className={`rounded-full px-6 py-2.5 text-sm font-bold shadow-lg transition-all active:scale-95 ${
+                    builder.isFollowedByViewer
+                      ? "border border-border bg-background text-foreground shadow-transparent hover:bg-muted"
+                      : "bg-blue-600 text-white shadow-blue-100 hover:bg-blue-700 hover:shadow-blue-200"
+                  }`}
+                  aria-pressed={builder.isFollowedByViewer ? "true" : "false"}
+                >
+                  {builder.isFollowedByViewer ? "Following" : "Follow"}
+                </button>
+              </form>
+            )}
             
             {/* Social Links */}
             <div className="ml-2 flex items-center gap-4 border-l border-border pl-5">

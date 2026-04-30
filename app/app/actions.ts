@@ -8,6 +8,7 @@ import { getAdminEmails, isSupabaseConfigured } from "@/lib/supabase/env"
 import { generateUniqueProjectSlug, getProjectForOwner, getViewer } from "@/lib/data"
 import {
   categories,
+  maxAvatarUploadBytes,
   maxHelpTagCount,
   maxMediaUploadBytes,
   maxProjectTagCount,
@@ -55,7 +56,11 @@ async function getOrigin() {
   return headerList.get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
 }
 
-async function signInWithProvider(provider: "google" | "github") {
+function getSafeNextPath(value: string) {
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/submit"
+}
+
+async function signInWithProvider(provider: "google" | "github", nextPath = "/submit") {
   configuredGuard()
 
   const supabase = await createSupabaseServerClient()
@@ -63,7 +68,7 @@ async function signInWithProvider(provider: "google" | "github") {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: `${origin}/auth/callback?next=/submit`,
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(getSafeNextPath(nextPath))}`,
       ...(provider === "github" ? { scopes: "read:user user:email" } : {}),
     },
   })
@@ -75,12 +80,12 @@ async function signInWithProvider(provider: "google" | "github") {
   redirect(data.url)
 }
 
-export async function signInWithGoogleAction() {
-  await signInWithProvider("google")
+export async function signInWithGoogleAction(formData?: FormData) {
+  await signInWithProvider("google", formData ? getString(formData, "next") : "/submit")
 }
 
-export async function signInWithGithubAction() {
-  await signInWithProvider("github")
+export async function signInWithGithubAction(formData?: FormData) {
+  await signInWithProvider("github", formData ? getString(formData, "next") : "/submit")
 }
 
 export async function signOutAction() {
@@ -90,6 +95,147 @@ export async function signOutAction() {
   }
 
   redirect("/")
+}
+
+export async function createProjectCommentAction(formData: FormData) {
+  configuredGuard()
+  const viewer = await getViewer()
+  const projectId = getString(formData, "projectId")
+  const projectSlug = getString(formData, "projectSlug")
+  const parentId = getString(formData, "parentId") || null
+  const content = getString(formData, "content")
+  const projectPath = projectSlug ? `/project/${projectSlug}` : "/browse"
+
+  if (!viewer) {
+    redirect(`/auth/login?next=${encodeURIComponent(projectPath)}`)
+  }
+
+  if (!content) {
+    throw new Error("Add a comment before posting.")
+  }
+
+  if (content.length > 2000) {
+    throw new Error("Keep comments under 2,000 characters.")
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, slug, status, live_revision_id")
+    .eq("id", projectId)
+    .eq("status", "approved")
+    .not("live_revision_id", "is", null)
+    .maybeSingle()
+
+  if (!project) {
+    throw new Error("Comments are only available on live approved projects.")
+  }
+
+  if (parentId) {
+    const { data: parent } = await supabase
+      .from("project_comments")
+      .select("id")
+      .eq("id", parentId)
+      .eq("project_id", projectId)
+      .eq("is_hidden", false)
+      .maybeSingle()
+
+    if (!parent) {
+      throw new Error("That conversation is no longer available.")
+    }
+  }
+
+  const { error } = await supabase.from("project_comments").insert({
+    project_id: projectId,
+    user_id: viewer.userId,
+    parent_id: parentId,
+    content,
+  })
+
+  if (error) {
+    throw new Error("Unable to post your comment.")
+  }
+
+  revalidatePath(`/project/${project.slug}`)
+  redirect(`/project/${project.slug}`)
+}
+
+export async function hideProjectCommentAction(formData: FormData) {
+  configuredGuard()
+  await adminGuard()
+  const commentId = getString(formData, "commentId")
+  const projectSlug = getString(formData, "projectSlug")
+  const supabase = await createSupabaseServerClient()
+  const { error } = await supabase.from("project_comments").update({ is_hidden: true }).eq("id", commentId)
+
+  if (error) {
+    throw new Error("Unable to hide this comment.")
+  }
+
+  if (projectSlug) {
+    revalidatePath(`/project/${projectSlug}`)
+    redirect(`/project/${projectSlug}`)
+  }
+
+  revalidatePath("/")
+}
+
+export async function toggleProjectLikeAction(formData: FormData) {
+  configuredGuard()
+  const redirectTo = getSafeNextPath(getString(formData, "redirectTo") || "/browse")
+  const projectId = getString(formData, "projectId")
+  const viewer = await getViewer()
+
+  if (!viewer) {
+    redirect(`/auth/login?next=${encodeURIComponent(redirectTo)}`)
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: project } = await supabase.from("projects").select("slug").eq("id", projectId).maybeSingle()
+  const { error } = await supabase.rpc("toggle_project_like", { target_project_id: projectId })
+
+  if (error) {
+    throw new Error(error.message || "Unable to update this like.")
+  }
+
+  revalidatePath("/")
+  revalidatePath("/browse")
+  revalidatePath("/dashboard/liked")
+
+  if (project?.slug) {
+    revalidatePath(`/project/${project.slug}`)
+  }
+
+  revalidatePath(redirectTo.split("?")[0] || "/")
+  redirect(redirectTo)
+}
+
+export async function toggleCreatorFollowAction(formData: FormData) {
+  configuredGuard()
+  const redirectTo = getSafeNextPath(getString(formData, "redirectTo") || "/browse")
+  const creatorId = getString(formData, "creatorId")
+  const viewer = await getViewer()
+
+  if (!viewer) {
+    redirect(`/auth/login?next=${encodeURIComponent(redirectTo)}`)
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const { data: creator } = await supabase.from("profiles").select("username").eq("id", creatorId).maybeSingle()
+  const { error } = await supabase.rpc("toggle_creator_follow", { target_creator_id: creatorId })
+
+  if (error) {
+    throw new Error(error.message || "Unable to update this follow.")
+  }
+
+  revalidatePath("/dashboard/following")
+
+  if (creator?.username) {
+    revalidatePath(`/builder/${creator.username}`)
+  }
+
+  revalidatePath(redirectTo.split("?")[0] || "/")
+  redirect(redirectTo)
 }
 
 function getString(formData: FormData, key: string) {
@@ -252,6 +398,21 @@ function validateMediaUploadSize(files: File[]) {
   }
 }
 
+function getOptionalFile(formData: FormData, name: string) {
+  const value = formData.get(name)
+  return value instanceof File && value.size > 0 ? value : null
+}
+
+function validateImageFile(file: File, maxBytes: number, sizeMessage: string) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Upload an image file.")
+  }
+
+  if (file.size > maxBytes) {
+    throw new Error(sizeMessage)
+  }
+}
+
 function validateUrl(value: string, message: string) {
   let parsed: URL
 
@@ -295,6 +456,27 @@ async function uploadAsset(file: File, userId: string, projectId: string) {
   return data.publicUrl
 }
 
+async function uploadAvatar(file: File, userId: string) {
+  validateImageFile(file, maxAvatarUploadBytes, "Upload an avatar image up to 5 MB.")
+
+  const supabase = await createSupabaseServerClient()
+  const fileName = slugify(file.name.replace(/\.[^.]+$/, "")) || "avatar"
+  const extension = file.name.includes(".") ? file.name.split(".").pop() : "bin"
+  const path = `${userId}/avatars/${crypto.randomUUID()}-${fileName}.${extension}`
+  const { error } = await supabase.storage.from("project-assets").upload(path, file, {
+    cacheControl: "3600",
+    contentType: file.type || undefined,
+    upsert: false,
+  })
+
+  if (error) {
+    throw new Error("Unable to upload your avatar.")
+  }
+
+  const { data } = supabase.storage.from("project-assets").getPublicUrl(path)
+  return data.publicUrl
+}
+
 async function assertUsernameAvailable(username: string, userId: string) {
   const supabase = await createSupabaseServerClient()
   const { data } = await supabase.from("profiles").select("id").eq("username", username).maybeSingle()
@@ -310,7 +492,8 @@ async function updateBuilderProfile(formData: FormData, viewer: NonNullable<Awai
   const fullName = getString(formData, "fullName")
   const username = await assertUsernameAvailable(normalizeUsername(getString(formData, "username")), viewer.userId)
   const bio = getString(formData, "bio")
-  const avatarUrl = getString(formData, "avatarUrl")
+  const avatarFile = getOptionalFile(formData, "avatarFile")
+  let avatarUrl = getString(formData, "avatarUrl")
   const twitterUrl = getString(formData, "twitterUrl")
   const githubUrl = getString(formData, "githubUrl")
 
@@ -320,6 +503,10 @@ async function updateBuilderProfile(formData: FormData, viewer: NonNullable<Awai
 
   if (avatarUrl) {
     validateUrl(avatarUrl, "Enter a valid avatar URL.")
+  }
+
+  if (avatarFile) {
+    avatarUrl = await uploadAvatar(avatarFile, viewer.userId)
   }
   
   if (twitterUrl) {

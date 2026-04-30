@@ -257,7 +257,7 @@ export default async function DashboardPage() {
             {liveProjects.map((project) => (
               <article key={project.id} className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
                       <StatusPill status={project.status} />
                       <span className="text-sm text-muted-foreground">Updated {formatDate(project.updatedAt)}</span>
@@ -266,24 +266,47 @@ export default async function DashboardPage() {
                     <p className="mt-2 text-muted-foreground">{project.tagline}</p>
                     <HelpWantedBadges tags={project.helpTags} className="mt-4" />
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Link
-                      href={`/dashboard/projects/${project.id}/edit`}
-                      className="rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background"
-                    >
-                      Submit update
-                    </Link>
-                    <form action={unpublishProjectAction}>
-                      <input type="hidden" name="projectId" value={project.id} />
-                      <button className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">
-                        Remove from public
-                      </button>
-                    </form>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start lg:flex-row">
+                    <div className="flex flex-col items-stretch gap-2">
+                      <Link
+                        href={`/dashboard/projects/${project.id}/edit`}
+                        className="rounded-full bg-foreground px-4 py-2 text-center text-sm font-semibold text-background"
+                      >
+                        Submit update
+                      </Link>
+                      <Link
+                        href={`/project/${project.slug}`}
+                        className="rounded-full border border-border px-4 py-2 text-center text-sm font-semibold hover:bg-muted"
+                      >
+                        View live page
+                      </Link>
+                      <form action={unpublishProjectAction}>
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <button className="w-full rounded-full border border-border px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+                          Remove from public
+                        </button>
+                      </form>
+                    </div>
                     <Link
                       href={`/project/${project.slug}`}
-                      className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-muted"
+                      className="group block w-32 shrink-0 overflow-hidden rounded-2xl border border-border bg-card shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition-transform hover:-translate-y-0.5"
                     >
-                      View live page
+                      <div className="aspect-[4/3] overflow-hidden bg-muted">
+                        {project.thumbnailUrl ? (
+                          <img
+                            src={project.thumbnailUrl}
+                            alt={project.name}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      <div className="px-2 py-1.5">
+                        <p className="truncate font-serif text-[11px] leading-tight">{project.name}</p>
+                      </div>
                     </Link>
                   </div>
                 </div>

@@ -6,7 +6,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Vibeblt",
-  description: "Free project directory for builders shipping AI-assisted products.",
+  description: "Launch AI-built projects, get useful feedback, and find collaborators.",
 }
 
 export default function RootLayout({

@@ -16,7 +16,11 @@ This app already has Supabase-based auth, storage, and project moderation wired 
   - `profiles`
   - `projects`
   - `project_revisions`
+  - `project_comments`
+  - `project_likes`
+  - `creator_follows`
 - Confirm the `project-assets` storage bucket exists and is public.
+- If this is an existing project, re-running `supabase/schema.sql` also adds the profile, project count, comment, like, and follow objects used by the app.
 
 ## 3. Set local environment variables
 
@@ -95,6 +99,11 @@ Run through this exact checklist:
     - `/browse`
     - `/project/[slug]`
     - `/builder/[username]`
+11. Open the approved project page while signed in.
+12. Post a comment and a nested reply.
+13. If your account is an admin, confirm the hide action removes a comment from the public conversation.
+14. Like the project and confirm it appears on `/dashboard/liked`.
+15. Follow the project creator and confirm they appear on `/dashboard/following`.
 
 ## 9. Common issues
 
@@ -102,3 +111,5 @@ Run through this exact checklist:
 - If sign-in works but admin access does not, confirm the login email is listed in `ADMIN_EMAILS`.
 - If uploads fail, confirm the `project-assets` bucket exists and the storage policies from `supabase/schema.sql` were applied.
 - If OAuth redirects fail, recheck the callback URLs in both the provider dashboard and Supabase Auth settings.
+- If comments fail to post, confirm the `project_comments` table and RLS policies from `supabase/schema.sql` were applied after the engagement update.
+- If likes or follows fail, confirm the `project_likes`, `creator_follows`, `toggle_project_like`, and `toggle_creator_follow` objects were applied.
