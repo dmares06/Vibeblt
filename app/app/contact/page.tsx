@@ -15,6 +15,9 @@ const contactErrors: Record<string, string> = {
   "email-not-configured": "Contact email is not configured yet.",
   "smtp-auth-failed": "Gmail rejected the SMTP login. Check the Gmail address and app password.",
   "smtp-connection-failed": "The server could not connect to Gmail SMTP.",
+  "smtp-sender-rejected": "Gmail rejected the sender address. CONTACT_FROM_EMAIL must use the same Gmail account as SMTP_USER.",
+  "smtp-recipient-rejected": "Gmail rejected the recipient address. Check CONTACT_TO_EMAIL.",
+  "smtp-data-rejected": "Gmail rejected the message content.",
   "send-failed": "The message could not be sent. Try again in a moment.",
 }
 

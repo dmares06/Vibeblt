@@ -69,7 +69,13 @@ type ContactEmailPayload = {
   text: string
 }
 
-type ContactEmailErrorCode = "smtp-auth-failed" | "smtp-connection-failed" | "send-failed"
+type ContactEmailErrorCode =
+  | "smtp-auth-failed"
+  | "smtp-connection-failed"
+  | "smtp-sender-rejected"
+  | "smtp-recipient-rejected"
+  | "smtp-data-rejected"
+  | "send-failed"
 
 class ContactEmailDeliveryError extends Error {
   code: ContactEmailErrorCode
@@ -141,11 +147,31 @@ async function sendSmtpCommand(socket: TLSSocket, command: string, expectedCodes
   const response = await readSmtpResponse(socket)
 
   if (!expectedCodes.some((code) => response.startsWith(code))) {
-    const errorCode = label === "AUTH" || response.startsWith("53") ? "smtp-auth-failed" : "send-failed"
+    const errorCode = getSmtpErrorCode(label, response)
     throw new ContactEmailDeliveryError(errorCode, `Unexpected SMTP response for ${label}: ${response}`)
   }
 
   return response
+}
+
+function getSmtpErrorCode(label: string, response: string): ContactEmailErrorCode {
+  if (label.startsWith("AUTH") || response.startsWith("53")) {
+    return "smtp-auth-failed"
+  }
+
+  if (label === "MAIL FROM") {
+    return "smtp-sender-rejected"
+  }
+
+  if (label === "RCPT TO") {
+    return "smtp-recipient-rejected"
+  }
+
+  if (label === "DATA") {
+    return "smtp-data-rejected"
+  }
+
+  return "send-failed"
 }
 
 async function sendEmailWithSmtp(payload: ContactEmailPayload) {
@@ -174,15 +200,15 @@ async function sendEmailWithSmtp(payload: ContactEmailPayload) {
     await sendSmtpCommand(socket, "AUTH LOGIN", ["334"])
     await sendSmtpCommand(socket, Buffer.from(user).toString("base64"), ["334"], "AUTH username")
     await sendSmtpCommand(socket, Buffer.from(pass).toString("base64"), ["235"], "AUTH password")
-    await sendSmtpCommand(socket, `MAIL FROM:<${extractEmailAddress(payload.from)}>`, ["250"])
-    await sendSmtpCommand(socket, `RCPT TO:<${payload.to}>`, ["250", "251"])
+    await sendSmtpCommand(socket, `MAIL FROM:<${extractEmailAddress(payload.from)}>`, ["250"], "MAIL FROM")
+    await sendSmtpCommand(socket, `RCPT TO:<${payload.to}>`, ["250", "251"], "RCPT TO")
     await sendSmtpCommand(socket, "DATA", ["354"])
 
     socket.write(`${createSmtpMessage(payload)}\r\n.\r\n`)
     const dataResponse = await readSmtpResponse(socket)
 
     if (!dataResponse.startsWith("250")) {
-      throw new ContactEmailDeliveryError("send-failed", `Unexpected SMTP DATA response: ${dataResponse}`)
+      throw new ContactEmailDeliveryError("smtp-data-rejected", `Unexpected SMTP DATA response: ${dataResponse}`)
     }
 
     await sendSmtpCommand(socket, "QUIT", ["221"])
@@ -235,7 +261,7 @@ export async function createContactEmailAction(formData: FormData) {
   const message = getString(formData, "message")
   const resendApiKey = process.env.RESEND_API_KEY
   const contactToEmail = process.env.CONTACT_TO_EMAIL ?? "dylanmares06@gmail.com"
-  const contactFromEmail = process.env.CONTACT_FROM_EMAIL ?? "Vibeblt <dylanmares06@gmail.com>"
+  const contactFromEmail = process.env.CONTACT_FROM_EMAIL ?? `Vibeblt <${process.env.SMTP_USER ?? "dylanmares06@gmail.com"}>`
 
   if (!senderEmail || !senderEmail.includes("@")) {
     redirect("/contact?error=invalid-email")
