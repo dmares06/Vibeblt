@@ -13,6 +13,8 @@ const contactErrors: Record<string, string> = {
   "subject-too-long": "Keep the subject under 120 characters.",
   "message-too-long": "Keep the message under 3,000 characters.",
   "email-not-configured": "Contact email is not configured yet.",
+  "smtp-auth-failed": "Gmail rejected the SMTP login. Check the Gmail address and app password.",
+  "smtp-connection-failed": "The server could not connect to Gmail SMTP.",
   "send-failed": "The message could not be sent. Try again in a moment.",
 }
 
