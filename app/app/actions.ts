@@ -1,5 +1,6 @@
 "use server"
 
+import { connect as connectTls, type TLSSocket } from "node:tls"
 import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
@@ -60,6 +61,122 @@ function getSafeNextPath(value: string) {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/submit"
 }
 
+type ContactEmailPayload = {
+  from: string
+  to: string
+  replyTo: string
+  subject: string
+  text: string
+}
+
+function cleanHeaderValue(value: string) {
+  return value.replace(/[\r\n]+/g, " ").trim()
+}
+
+function extractEmailAddress(value: string) {
+  return value.match(/<([^>]+)>/)?.[1]?.trim() ?? value.trim()
+}
+
+function dotStuffMessage(value: string) {
+  return value.replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..")
+}
+
+function createSmtpMessage(payload: ContactEmailPayload) {
+  return [
+    `From: ${cleanHeaderValue(payload.from)}`,
+    `To: ${cleanHeaderValue(payload.to)}`,
+    `Reply-To: ${cleanHeaderValue(payload.replyTo)}`,
+    `Subject: ${cleanHeaderValue(payload.subject)}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    dotStuffMessage(payload.text),
+  ].join("\r\n")
+}
+
+function readSmtpResponse(socket: TLSSocket) {
+  return new Promise<string>((resolve, reject) => {
+    let response = ""
+
+    const cleanup = () => {
+      socket.off("data", onData)
+      socket.off("error", onError)
+    }
+
+    const onError = (error: Error) => {
+      cleanup()
+      reject(error)
+    }
+
+    const onData = (chunk: Buffer | string) => {
+      response += chunk.toString()
+      const lines = response.split(/\r?\n/).filter(Boolean)
+      const lastLine = lines.at(-1)
+
+      if (lastLine && /^\d{3} /.test(lastLine)) {
+        cleanup()
+        resolve(response)
+      }
+    }
+
+    socket.on("data", onData)
+    socket.on("error", onError)
+  })
+}
+
+async function sendSmtpCommand(socket: TLSSocket, command: string, expectedCodes: string[]) {
+  socket.write(`${command}\r\n`)
+  const response = await readSmtpResponse(socket)
+
+  if (!expectedCodes.some((code) => response.startsWith(code))) {
+    throw new Error(`Unexpected SMTP response for ${command.split(" ")[0]}: ${response}`)
+  }
+
+  return response
+}
+
+async function sendEmailWithSmtp(payload: ContactEmailPayload) {
+  const host = process.env.SMTP_HOST
+  const port = Number(process.env.SMTP_PORT ?? "465")
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASS
+
+  if (!host || !user || !pass) {
+    return false
+  }
+
+  const socket = await new Promise<TLSSocket>((resolve, reject) => {
+    const connection = connectTls({ host, port, servername: host }, () => resolve(connection))
+
+    connection.setTimeout(15000)
+    connection.once("error", reject)
+    connection.once("timeout", () => reject(new Error("SMTP connection timed out.")))
+  })
+
+  try {
+    await readSmtpResponse(socket)
+    await sendSmtpCommand(socket, "EHLO vibeblt.com", ["250"])
+    await sendSmtpCommand(socket, "AUTH LOGIN", ["334"])
+    await sendSmtpCommand(socket, Buffer.from(user).toString("base64"), ["334"])
+    await sendSmtpCommand(socket, Buffer.from(pass).toString("base64"), ["235"])
+    await sendSmtpCommand(socket, `MAIL FROM:<${extractEmailAddress(payload.from)}>`, ["250"])
+    await sendSmtpCommand(socket, `RCPT TO:<${payload.to}>`, ["250", "251"])
+    await sendSmtpCommand(socket, "DATA", ["354"])
+
+    socket.write(`${createSmtpMessage(payload)}\r\n.\r\n`)
+    const dataResponse = await readSmtpResponse(socket)
+
+    if (!dataResponse.startsWith("250")) {
+      throw new Error(`Unexpected SMTP DATA response: ${dataResponse}`)
+    }
+
+    await sendSmtpCommand(socket, "QUIT", ["221"])
+    return true
+  } finally {
+    socket.end()
+  }
+}
+
 async function signInWithProvider(provider: "google" | "github", nextPath = "/submit") {
   configuredGuard()
 
@@ -103,7 +220,7 @@ export async function createContactEmailAction(formData: FormData) {
   const message = getString(formData, "message")
   const resendApiKey = process.env.RESEND_API_KEY
   const contactToEmail = process.env.CONTACT_TO_EMAIL ?? "dylanmares06@gmail.com"
-  const contactFromEmail = process.env.CONTACT_FROM_EMAIL ?? "Vibeblt <onboarding@resend.dev>"
+  const contactFromEmail = process.env.CONTACT_FROM_EMAIL ?? "Vibeblt <dylanmares06@gmail.com>"
 
   if (!senderEmail || !senderEmail.includes("@")) {
     redirect("/contact?error=invalid-email")
@@ -121,16 +238,35 @@ export async function createContactEmailAction(formData: FormData) {
     redirect("/contact?error=message-too-long")
   }
 
-  if (!resendApiKey) {
-    redirect("/contact?error=email-not-configured")
-  }
-
   const body = [
     `Sender email: ${senderEmail}`,
     `Subject: ${subject}`,
     "",
     message,
   ].join("\n")
+
+  let sentWithSmtp = false
+
+  try {
+    sentWithSmtp = await sendEmailWithSmtp({
+      from: contactFromEmail,
+      to: contactToEmail,
+      replyTo: senderEmail,
+      subject: `[Vibeblt] ${subject}`,
+      text: body,
+    })
+  } catch (error) {
+    console.error("Contact email failed via SMTP", error)
+    redirect("/contact?error=send-failed")
+  }
+
+  if (sentWithSmtp) {
+    redirect("/contact?sent=1")
+  }
+
+  if (!resendApiKey) {
+    redirect("/contact?error=email-not-configured")
+  }
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -143,10 +279,18 @@ export async function createContactEmailAction(formData: FormData) {
       to: [contactToEmail],
       subject: `[Vibeblt] ${subject}`,
       text: body,
+      reply_to: senderEmail,
     }),
   })
 
   if (!response.ok) {
+    const errorText = await response.text()
+    console.error("Contact email failed", {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText,
+    })
+
     redirect("/contact?error=send-failed")
   }
 
