@@ -39,7 +39,7 @@ export function HelpTagFieldset({ selectedTags = [] }: HelpTagFieldsetProps) {
       <div>
         <p className="text-sm font-semibold text-foreground">Help wanted</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Add up to {maxHelpTagCount} tags if you want extra eyes on security, design, launch work, collaboration, or any other area.
+          Add up to {maxHelpTagCount} tags if you want extra eyes on security, design, marketing, accessibility, QA, pricing, or any other area.
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {totalCount}/{maxHelpTagCount} selected

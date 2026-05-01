@@ -23,6 +23,24 @@ alter table public.profiles
   add column if not exists github_url text;
 
 alter table public.profiles
+  add column if not exists website_url text;
+
+alter table public.profiles
+  add column if not exists contact_enabled boolean not null default false;
+
+alter table public.profiles
+  add column if not exists contact_email text;
+
+alter table public.profiles
+  add column if not exists contact_note text;
+
+alter table public.profiles
+  add column if not exists focus_areas text[] not null default '{}';
+
+alter table public.profiles
+  add column if not exists open_to text[] not null default '{}';
+
+alter table public.profiles
   add column if not exists follower_count integer not null default 0;
 
 alter table public.profiles
@@ -65,6 +83,9 @@ alter table public.projects
 alter table public.projects
   add constraint projects_status_check
   check (status in ('draft', 'pending_review', 'approved_pending_publish', 'approved', 'changes_requested', 'rejected'));
+
+alter table public.profiles
+  add column if not exists featured_project_id uuid references public.projects(id) on delete set null;
 
 create table if not exists public.project_revisions (
   id uuid primary key default gen_random_uuid(),

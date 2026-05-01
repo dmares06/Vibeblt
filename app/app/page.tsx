@@ -146,8 +146,8 @@ export default async function HomePage() {
               Vibecoded projects can have flaws — get help and ship with confidence.
             </h2>
             <p className="mt-4 max-w-2xl text-muted-foreground">
-              We created help tags so you can mark where you want extra eyes — security, design, performance, launch
-              prep — and let the community lift the rough spots into something you're proud to ship.
+              We created help tags so you can mark where you want extra eyes — security, design, performance, marketing,
+              accessibility, pricing, QA — and let the community lift the rough spots into something you're proud to ship.
             </p>
 
             <FallingHelpTags />

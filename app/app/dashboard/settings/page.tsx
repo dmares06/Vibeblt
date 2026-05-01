@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation"
-import { getViewer } from "@/lib/data"
+import { getOwnedProjects, getViewer } from "@/lib/data"
 import { updateAccountSettingsAction } from "@/app/actions"
+import { AvatarUploadField } from "@/components/avatar-upload-field"
+import { maxProfileFocusAreaCount, presetOpenToOptions, presetProjectTags } from "@/lib/constants"
 import Link from "next/link"
 
 interface SettingsPageProps {
@@ -18,6 +20,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   }
 
   const { profile } = viewer
+  const ownedProjects = await getOwnedProjects(viewer.userId)
+  const featureableProjects = ownedProjects.filter((project) => project.status === "approved" && project.isLive)
+  const selectedFocusAreas = new Set(profile.focusAreas ?? [])
+  const selectedOpenTo = new Set(profile.openTo ?? [])
 
   return (
     <div className="space-y-10">
@@ -33,7 +39,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       )}
 
       <div className="rounded-[2.5rem] border border-border bg-card shadow-sm overflow-hidden">
-        <form action={updateAccountSettingsAction} encType="multipart/form-data">
+        <form action={updateAccountSettingsAction}>
           <div className="p-8 sm:p-10 space-y-8">
             {/* General Info */}
             <section className="space-y-6">
@@ -80,24 +86,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                 />
               </label>
 
-              <label className="grid gap-2">
-                <span className="text-sm font-semibold px-1">Avatar Image</span>
-                <input
-                  name="avatarFile"
-                  type="file"
-                  accept="image/*"
-                  className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm"
-                />
-                {profile.avatarUrl ? (
-                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
-                    <span className="h-14 w-14 overflow-hidden rounded-full bg-muted">
-                      <img src={profile.avatarUrl} alt={profile.fullName} className="h-full w-full object-cover" />
-                    </span>
-                    <span className="text-xs text-muted-foreground">Current avatar. Choose a new image to replace it.</span>
-                  </div>
-                ) : null}
-                <p className="text-[11px] text-muted-foreground px-1">Upload a square image up to 5 MB.</p>
-              </label>
+              <AvatarUploadField currentAvatarUrl={profile.avatarUrl} fullName={profile.fullName} />
 
               <label className="grid gap-2">
                 <span className="text-sm font-semibold px-1">Avatar URL</span>
@@ -114,10 +103,129 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
             <div className="h-px bg-border/60" />
 
-            {/* Socials */}
             <section className="space-y-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white uppercase tracking-wider">02</div>
+                <h2 className="font-serif text-2xl">Public Profile Highlights</h2>
+              </div>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold px-1">Website URL</span>
+                <input
+                  name="websiteUrl"
+                  type="url"
+                  defaultValue={profile.websiteUrl ?? ""}
+                  placeholder="https://your-site.com"
+                  className="min-h-12 rounded-2xl border border-border bg-background px-4 py-2 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-all"
+                />
+              </label>
+
+              <div className="grid gap-4 rounded-2xl border border-border bg-muted/20 p-4">
+                <label className="flex items-start gap-3">
+                  <input
+                    name="contactEnabled"
+                    type="checkbox"
+                    defaultChecked={profile.contactEnabled ?? false}
+                    className="mt-1 h-4 w-4 rounded border-border"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">Show a Get in touch card</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">Display a compact contact card under your profile photo.</span>
+                  </span>
+                </label>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold px-1">Public Contact Email</span>
+                    <input
+                      name="contactEmail"
+                      type="email"
+                      defaultValue={profile.contactEmail ?? ""}
+                      placeholder="hello@example.com"
+                      className="min-h-12 rounded-2xl border border-border bg-background px-4 py-2 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-all"
+                    />
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold px-1">Contact Note</span>
+                    <input
+                      name="contactNote"
+                      defaultValue={profile.contactNote ?? ""}
+                      maxLength={90}
+                      placeholder="Available for new projects"
+                      className="min-h-12 rounded-2xl border border-border bg-background px-4 py-2 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-all"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <div>
+                  <p className="text-sm font-semibold px-1">Focus Areas</p>
+                  <p className="mt-1 px-1 text-xs text-muted-foreground">Choose up to {maxProfileFocusAreaCount} areas you want to be known for.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {presetProjectTags.map((tag) => (
+                    <label key={tag} className="cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="focusAreas"
+                        value={tag}
+                        defaultChecked={selectedFocusAreas.has(tag)}
+                        className="peer sr-only"
+                      />
+                      <span className="inline-flex rounded-full border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors peer-checked:border-blue-200 peer-checked:bg-blue-50 peer-checked:text-blue-700">
+                        {tag}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <p className="text-sm font-semibold px-1">Open To</p>
+                <div className="flex flex-wrap gap-2">
+                  {presetOpenToOptions.map((option) => (
+                    <label key={option} className="cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="openTo"
+                        value={option}
+                        defaultChecked={selectedOpenTo.has(option)}
+                        className="peer sr-only"
+                      />
+                      <span className="inline-flex rounded-full border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors peer-checked:border-emerald-200 peer-checked:bg-emerald-50 peer-checked:text-emerald-700">
+                        {option}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-semibold px-1">Featured Project</span>
+                <select
+                  name="featuredProjectId"
+                  defaultValue={profile.featuredProjectId ?? ""}
+                  className="min-h-12 rounded-2xl border border-border bg-background px-4 py-2 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 transition-all"
+                >
+                  <option value="">No featured project</option>
+                  {featureableProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground px-1">Only live approved projects can be featured.</p>
+              </label>
+            </section>
+
+            <div className="h-px bg-border/60" />
+
+            {/* Socials */}
+            <section className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white uppercase tracking-wider">03</div>
                 <h2 className="font-serif text-2xl">Social Connections</h2>
               </div>
 

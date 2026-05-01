@@ -33,11 +33,20 @@ export const presetProjectTags = [
   "Portfolio",
   "SaaS",
   "AI Agent",
+  "AI Chatbot",
+  "Automation",
+  "Mobile App",
+  "Web App",
   "Workflow",
   "Developer Tool",
+  "Creator Tools",
+  "Data / Analytics",
   "Education",
   "Finance",
   "Health",
+  "CRM",
+  "Content",
+  "Local Business",
   "Social",
   "Productivity",
 ] as const
@@ -49,7 +58,25 @@ export const presetHelpTags = [
   "Collab",
   "Performance",
   "Growth",
+  "Marketing",
+  "Advertising",
+  "SEO Keywords",
+  "Accessibility",
+  "QA / Bug Testing",
+  "Copywriting",
+  "Pricing",
+  "User Research",
+  "Analytics",
   "Product Feedback",
 ] as const
 
 export const maxHelpTagCount = 5
+
+export const presetOpenToOptions = [
+  "Feedback",
+  "Collaboration",
+  "Helping builders",
+  "Beta testers",
+] as const
+
+export const maxProfileFocusAreaCount = 5

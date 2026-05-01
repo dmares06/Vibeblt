@@ -16,8 +16,15 @@ export interface BuilderProfile {
   avatarUrl?: string | null
   bio?: string | null
   isAdmin?: boolean
+  websiteUrl?: string | null
   twitterUrl?: string | null
   githubUrl?: string | null
+  contactEnabled?: boolean
+  contactEmail?: string | null
+  contactNote?: string | null
+  focusAreas?: string[]
+  openTo?: string[]
+  featuredProjectId?: string | null
   followerCount?: number
   projectCount?: number
   isFollowedByViewer?: boolean

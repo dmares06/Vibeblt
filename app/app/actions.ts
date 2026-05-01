@@ -12,8 +12,10 @@ import {
   maxAvatarUploadBytes,
   maxHelpTagCount,
   maxMediaUploadBytes,
+  maxProfileFocusAreaCount,
   maxProjectTagCount,
   maxScreenshotCount,
+  presetOpenToOptions,
   presetHelpTags,
   presetProjectTags,
 } from "@/lib/constants"
@@ -673,6 +675,12 @@ function validateUrl(value: string, message: string) {
   }
 }
 
+function validateEmail(value: string, message: string) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw new Error(message)
+  }
+}
+
 function normalizeUsername(value: string) {
   const normalized = slugify(value.replace(/^@+/, ""))
 
@@ -734,14 +742,60 @@ async function assertUsernameAvailable(username: string, userId: string) {
   return username
 }
 
+function isMissingOptionalProfileColumnError(error: { message?: string; details?: string | null }) {
+  const text = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase()
+  return [
+    "github_url",
+    "twitter_url",
+    "website_url",
+    "contact_enabled",
+    "contact_email",
+    "contact_note",
+    "focus_areas",
+    "open_to",
+    "featured_project_id",
+  ].some((column) => text.includes(column))
+}
+
+function getProfileFocusAreas(formData: FormData) {
+  const selected = formData
+    .getAll("focusAreas")
+    .filter((value): value is string => typeof value === "string")
+    .filter((value) => presetProjectTags.includes(value as (typeof presetProjectTags)[number]))
+
+  const deduped = Array.from(new Set(selected))
+
+  if (deduped.length > maxProfileFocusAreaCount) {
+    throw new Error(`Choose up to ${maxProfileFocusAreaCount} focus areas.`)
+  }
+
+  return deduped
+}
+
+function getOpenTo(formData: FormData) {
+  const selected = formData
+    .getAll("openTo")
+    .filter((value): value is string => typeof value === "string")
+    .filter((value) => presetOpenToOptions.includes(value as (typeof presetOpenToOptions)[number]))
+
+  return Array.from(new Set(selected))
+}
+
 async function updateBuilderProfile(formData: FormData, viewer: NonNullable<Awaited<ReturnType<typeof getViewer>>>) {
   const fullName = getString(formData, "fullName")
   const username = await assertUsernameAvailable(normalizeUsername(getString(formData, "username")), viewer.userId)
   const bio = getString(formData, "bio")
   const avatarFile = getOptionalFile(formData, "avatarFile")
   let avatarUrl = getString(formData, "avatarUrl")
+  const websiteUrl = getString(formData, "websiteUrl")
   const twitterUrl = getString(formData, "twitterUrl")
   const githubUrl = getString(formData, "githubUrl")
+  const contactEnabled = formData.get("contactEnabled") === "on"
+  const contactEmail = getString(formData, "contactEmail")
+  const contactNote = getString(formData, "contactNote").slice(0, 90)
+  const focusAreas = getProfileFocusAreas(formData)
+  const openTo = getOpenTo(formData)
+  const featuredProjectId = getString(formData, "featuredProjectId") || null
 
   if (!fullName) {
     throw new Error("Add your name before continuing.")
@@ -754,6 +808,10 @@ async function updateBuilderProfile(formData: FormData, viewer: NonNullable<Awai
   if (avatarFile) {
     avatarUrl = await uploadAvatar(avatarFile, viewer.userId)
   }
+
+  if (websiteUrl) {
+    validateUrl(websiteUrl, "Enter a valid website URL.")
+  }
   
   if (twitterUrl) {
     validateUrl(twitterUrl, "Enter a valid Twitter/X URL.")
@@ -763,20 +821,73 @@ async function updateBuilderProfile(formData: FormData, viewer: NonNullable<Awai
     validateUrl(githubUrl, "Enter a valid GitHub URL.")
   }
 
+  if (contactEmail) {
+    validateEmail(contactEmail, "Enter a valid public contact email.")
+  }
+
+  if (featuredProjectId) {
+    const featuredProject = await getOwnedProjectRow(viewer.userId, featuredProjectId)
+    if (featuredProject.status !== "approved" || !featuredProject.live_revision_id) {
+      throw new Error("Choose a live approved project to feature.")
+    }
+  }
+
   const supabase = await createSupabaseServerClient()
-  const { error } = await supabase
+  const profileUpdates = {
+    full_name: fullName,
+    username,
+    bio: bio || null,
+    avatar_url: avatarUrl || null,
+    website_url: websiteUrl || null,
+    twitter_url: twitterUrl || null,
+    github_url: githubUrl || null,
+    contact_enabled: contactEnabled,
+    contact_email: contactEmail || null,
+    contact_note: contactNote || null,
+    focus_areas: focusAreas,
+    open_to: openTo,
+    featured_project_id: featuredProjectId,
+  }
+  let { error } = await supabase
     .from("profiles")
-    .update({
-      full_name: fullName,
-      username,
-      bio: bio || null,
-      avatar_url: avatarUrl || null,
-      twitter_url: twitterUrl || null,
-      github_url: githubUrl || null,
-    })
+    .update(profileUpdates)
     .eq("id", viewer.userId)
 
+  if (error && isMissingOptionalProfileColumnError(error)) {
+    console.warn("Retrying profile update without optional social columns because the live schema is missing them.", {
+      code: error.code,
+      message: error.message,
+      userId: viewer.userId,
+    })
+
+    const retry = await supabase
+      .from("profiles")
+      .update({
+        full_name: fullName,
+        username,
+        bio: bio || null,
+        avatar_url: avatarUrl || null,
+      })
+      .eq("id", viewer.userId)
+
+    error = retry.error
+  }
+
   if (error) {
+    const message = [error.message, error.details, error.hint].filter(Boolean).join(" ")
+    console.error("Unable to update builder profile", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      userId: viewer.userId,
+      username,
+      hasAvatarFile: Boolean(avatarFile),
+      hasAvatarUrl: Boolean(avatarUrl),
+    })
+    if (process.env.NODE_ENV !== "production") {
+      throw new Error(`Unable to update your builder profile: ${message || error.code}`)
+    }
     throw new Error("Unable to update your builder profile.")
   }
 

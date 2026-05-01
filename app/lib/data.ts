@@ -51,8 +51,15 @@ type ProfileRow = {
   avatar_url: string | null
   bio: string | null
   is_admin: boolean | null
+  website_url?: string | null
   twitter_url: string | null
   github_url: string | null
+  contact_enabled?: boolean | null
+  contact_email?: string | null
+  contact_note?: string | null
+  focus_areas?: string[] | null
+  open_to?: string[] | null
+  featured_project_id?: string | null
   follower_count: number | null
   project_count: number | null
 }
@@ -77,8 +84,15 @@ function toBuilderProfile(profile: ProfileRow): BuilderProfile {
     avatarUrl: profile.avatar_url,
     bio: profile.bio,
     isAdmin: Boolean(profile.is_admin),
+    websiteUrl: profile.website_url ?? null,
     twitterUrl: profile.twitter_url,
     githubUrl: profile.github_url,
+    contactEnabled: Boolean(profile.contact_enabled),
+    contactEmail: profile.contact_email ?? null,
+    contactNote: profile.contact_note ?? null,
+    focusAreas: profile.focus_areas ?? [],
+    openTo: profile.open_to ?? [],
+    featuredProjectId: profile.featured_project_id ?? null,
     followerCount: profile.follower_count ?? 0,
     projectCount: profile.project_count ?? 0,
   }

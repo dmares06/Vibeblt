@@ -253,7 +253,7 @@ export default async function SubmitPage({ searchParams }: SubmitPageProps) {
               <h2 className="mt-3 font-serif text-4xl">{stepDescriptions[currentStep]}</h2>
 
           {currentStep === "profile" ? (
-            <form action={saveSubmissionProfileAction} encType="multipart/form-data" className="mt-8 grid gap-6">
+            <form action={saveSubmissionProfileAction} className="mt-8 grid gap-6">
               {project ? <input type="hidden" name="projectId" value={project.id} /> : null}
               <input type="hidden" name="nextStep" value="project" />
 
